@@ -73,13 +73,28 @@ void CPipeServer::WriteString1(const char* value) //for 1 byte length strings
 	}
 }
 
+#include <locale> 
+#include <codecvt> 
+WORD UTF8TOUTF16(char* szUtf8) {
+
+	std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
+	std::u16string dest = convert.from_bytes(szUtf8);
+	return *(WORD*)&dest[0];
+}
 void CPipeServer::WriteString(const char* value)
 {
 	if (value)
 	{
-		int n = strlen(value);
-		WriteWord(n);
-		Write((PVOID)value, n);
+		std::string sName = std::string(value);
+
+		if ((BYTE)value[0] == 0xEE) {
+			char szUeName[32];
+			sprintf_s(szUeName, 32, "\\u%04X", UTF8TOUTF16((char*)value));
+			sName = szUeName;
+		}
+
+		WriteWord(sName.size());
+		Write((PVOID)sName.c_str(), sName.size());
 
 		//OutputDebugStringA(value);
 	}
@@ -615,14 +630,6 @@ void CPipeServer::GetImageName()
 	Write(s, strlen(s));
 }
 
-#include <locale> 
-#include <codecvt> 
-WORD UTF8TOUTF16(char* szUtf8) {
-
-	std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
-	std::u16string dest = convert.from_bytes(szUtf8);
-	return *(WORD*)&dest[0];
-}
 void CPipeServer::EnumClassesInImage()
 {
 	int i;
@@ -707,13 +714,7 @@ void CPipeServer::EnumClassesInImage()
 					WriteWord(0);
 
 				name = mono_class_get_namespace(c);
-				if (name)
-				{
-					WriteWord(strlen(name));
-					Write(name, strlen(name));
-				}
-				else
-					WriteWord(0);
+				WriteString(name);
 				}
 				else
 					WriteQword(0);
@@ -1059,8 +1060,16 @@ void CPipeServer::GetClassNamespace()
 	void *klass = (void *)ReadQword();
 	char *methodname = mono_class_get_namespace(klass);
 
-	WriteWord(strlen(methodname));
-	Write(methodname, strlen(methodname));
+	std::string sName = std::string(methodname);
+
+	if ((BYTE)methodname[0] == 0xEE) {
+		char szUeName[32];
+		sprintf_s(szUeName, 32, "\\u%04X", UTF8TOUTF16(methodname));
+		sName = szUeName;
+	}
+
+	WriteWord(sName.size());
+	Write((PVOID)sName.c_str(), sName.size());
 }
 
 void CPipeServer::FreeMethod()
